@@ -1,11 +1,23 @@
 import { io } from "socket.io-client";
 
-const socket = io("https://youtube-watch-party-1ihc.onrender.com", {
-  transports: ["polling", "websocket"],
-  withCredentials: true,
-  reconnection: true,
-  reconnectionAttempts: 10,
-  reconnectionDelay: 2000,
+const socket = io(
+  "https://youtube-watch-party-bejz.onrender.com",
+  {
+    transports: ["websocket", "polling"],
+    autoConnect: true,
+  }
+);
+
+socket.on("connect", () => {
+  console.log("🟢 Connected to server:", socket.id);
+});
+
+socket.on("disconnect", () => {
+  console.log("🔴 Disconnected from server");
+});
+
+socket.on("connect_error", (error) => {
+  console.error("❌ Socket connection error:", error.message);
 });
 
 export default socket;
