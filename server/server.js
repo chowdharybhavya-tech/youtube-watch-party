@@ -45,6 +45,26 @@ function generateRoomCode() {
 }
 
 // =====================================
+// HELPER - CHECK MODERATOR
+// =====================================
+
+function canModerate(room, socketId) {
+  if (!room) return false;
+
+  // Host can always moderate
+  if (room.hostId === socketId) {
+    return true;
+  }
+
+  // Moderator can moderate
+  const participant = room.participants.find(
+    (p) => p.id === socketId
+  );
+
+  return participant && participant.role === "moderator";
+}
+
+// =====================================
 // SOCKET CONNECTION
 // =====================================
 
@@ -76,9 +96,7 @@ io.on("connection", (socket) => {
       ],
 
       videoId: "dQw4w9WgXcQ",
-
       isPlaying: false,
-
       currentTime: 0,
     };
 
@@ -116,7 +134,6 @@ io.on("connection", (socket) => {
         "error-message",
         "Room does not exist"
       );
-
       return;
     }
 
@@ -150,6 +167,191 @@ io.on("connection", (socket) => {
       `✅ ${username} joined ${roomId}`
     );
   });
+
+  // =====================================
+  // PROMOTE PARTICIPANT TO MODERATOR
+  // =====================================
+
+  socket.on(
+    "make-moderator",
+    ({ roomId, participantId }) => {
+      const room = rooms[roomId];
+
+      if (!room) return;
+
+      // ONLY HOST CAN MAKE MODERATOR
+      if (socket.id !== room.hostId) {
+        socket.emit(
+          "error-message",
+          "Only the host can make a moderator."
+        );
+        return;
+      }
+
+      const participant = room.participants.find(
+        (p) => p.id === participantId
+      );
+
+      if (!participant) {
+        socket.emit(
+          "error-message",
+          "Participant not found."
+        );
+        return;
+      }
+
+      // Don't change host role
+      if (participant.id === room.hostId) {
+        return;
+      }
+
+      participant.role = "moderator";
+
+      console.log(
+        `🛡️ ${participant.username} is now a moderator`
+      );
+
+      io.to(roomId).emit(
+        "participants-updated",
+        room.participants
+      );
+
+      io.to(roomId).emit(
+        "moderator-updated",
+        {
+          participantId: participant.id,
+          username: participant.username,
+          role: "moderator",
+        }
+      );
+    }
+  );
+
+  // =====================================
+  // REMOVE MODERATOR ROLE
+  // =====================================
+
+  socket.on(
+    "remove-moderator",
+    ({ roomId, participantId }) => {
+      const room = rooms[roomId];
+
+      if (!room) return;
+
+      // ONLY HOST CAN REMOVE MODERATOR
+      if (socket.id !== room.hostId) {
+        socket.emit(
+          "error-message",
+          "Only the host can remove moderator."
+        );
+        return;
+      }
+
+      const participant = room.participants.find(
+        (p) => p.id === participantId
+      );
+
+      if (!participant) return;
+
+      if (participant.id === room.hostId) {
+        return;
+      }
+
+      participant.role = "participant";
+
+      console.log(
+        `👤 ${participant.username} is no longer a moderator`
+      );
+
+      io.to(roomId).emit(
+        "participants-updated",
+        room.participants
+      );
+    }
+  );
+
+  // =====================================
+  // KICK PARTICIPANT
+  // =====================================
+
+  socket.on(
+    "kick-participant",
+    ({ roomId, participantId }) => {
+      const room = rooms[roomId];
+
+      if (!room) return;
+
+      // Host or moderator can kick
+      if (!canModerate(room, socket.id)) {
+        socket.emit(
+          "error-message",
+          "You do not have permission to remove participants."
+        );
+        return;
+      }
+
+      // Cannot kick host
+      if (participantId === room.hostId) {
+        socket.emit(
+          "error-message",
+          "Host cannot be removed."
+        );
+        return;
+      }
+
+      const participant = room.participants.find(
+        (p) => p.id === participantId
+      );
+
+      if (!participant) return;
+
+      // Moderator cannot kick another moderator
+      const currentUser = room.participants.find(
+        (p) => p.id === socket.id
+      );
+
+      if (
+        currentUser &&
+        currentUser.role === "moderator" &&
+        participant.role === "moderator"
+      ) {
+        socket.emit(
+          "error-message",
+          "Moderator cannot remove another moderator."
+        );
+        return;
+      }
+
+      // Remove from room
+      room.participants =
+        room.participants.filter(
+          (p) => p.id !== participantId
+        );
+
+      // Find target socket
+      const targetSocket =
+        io.sockets.sockets.get(participantId);
+
+      if (targetSocket) {
+        targetSocket.leave(roomId);
+        targetSocket.roomId = null;
+
+        targetSocket.emit(
+          "kicked-from-room",
+          "You have been removed from the room."
+        );
+      }
+
+      io.to(roomId).emit(
+        "participants-updated",
+        room.participants
+      );
+
+      console.log(
+        `🚫 ${participant.username} was removed from ${roomId}`
+      );
+    }
+  );
 
   // =====================================
   // PLAYER READY
@@ -186,12 +388,11 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Only host can change video
-      if (socket.id !== room.hostId) {
+      // Host OR moderator can change video
+      if (!canModerate(room, socket.id)) {
         console.log(
-          "❌ Non-host tried to change video"
+          "❌ User tried to change video without permission"
         );
-
         return;
       }
 
@@ -231,8 +432,8 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Only host controls playback
-      if (socket.id !== room.hostId) {
+      // Host OR moderator
+      if (!canModerate(room, socket.id)) {
         return;
       }
 
@@ -269,8 +470,8 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Only host controls playback
-      if (socket.id !== room.hostId) {
+      // Host OR moderator
+      if (!canModerate(room, socket.id)) {
         return;
       }
 
@@ -307,8 +508,8 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Only host controls seeking
-      if (socket.id !== room.hostId) {
+      // Host OR moderator
+      if (!canModerate(room, socket.id)) {
         return;
       }
 
@@ -357,6 +558,81 @@ io.on("connection", (socket) => {
   );
 
   // =====================================
+  // LEAVE ROOM
+  // =====================================
+
+  socket.on("leave-room", () => {
+    const roomId = socket.roomId;
+
+    if (!roomId) {
+      return;
+    }
+
+    const room = rooms[roomId];
+
+    if (!room) {
+      socket.roomId = null;
+      return;
+    }
+
+    // =====================================
+    // HOST LEAVES
+    // =====================================
+
+    if (socket.id === room.hostId) {
+      io.to(roomId).emit(
+        "error-message",
+        "Host left the room. Room closed."
+      );
+
+      io.to(roomId).emit(
+        "room-closed"
+      );
+
+      delete rooms[roomId];
+
+      socket.leave(roomId);
+      socket.roomId = null;
+
+      console.log(
+        `❌ Room ${roomId} deleted because host left`
+      );
+
+      return;
+    }
+
+    // =====================================
+    // PARTICIPANT LEAVES
+    // =====================================
+
+    const leavingParticipant =
+      room.participants.find(
+        (p) => p.id === socket.id
+      );
+
+    room.participants =
+      room.participants.filter(
+        (p) => p.id !== socket.id
+      );
+
+    socket.leave(roomId);
+    socket.roomId = null;
+
+    io.to(roomId).emit(
+      "participants-updated",
+      room.participants
+    );
+
+    console.log(
+      `👋 ${
+        leavingParticipant
+          ? leavingParticipant.username
+          : socket.username
+      } left ${roomId}`
+    );
+  });
+
+  // =====================================
   // DISCONNECT
   // =====================================
 
@@ -386,6 +662,10 @@ io.on("connection", (socket) => {
       io.to(roomId).emit(
         "error-message",
         "Host left the room. Room closed."
+      );
+
+      io.to(roomId).emit(
+        "room-closed"
       );
 
       delete rooms[roomId];
