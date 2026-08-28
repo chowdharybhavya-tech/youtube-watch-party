@@ -45,26 +45,6 @@ function generateRoomCode() {
 }
 
 // =====================================
-// HELPER - CHECK MODERATOR
-// =====================================
-
-function canModerate(room, socketId) {
-  if (!room) return false;
-
-  // Host can always moderate
-  if (room.hostId === socketId) {
-    return true;
-  }
-
-  // Moderator can moderate
-  const participant = room.participants.find(
-    (p) => p.id === socketId
-  );
-
-  return participant && participant.role === "moderator";
-}
-
-// =====================================
 // SOCKET CONNECTION
 // =====================================
 
@@ -101,12 +81,12 @@ io.on("connection", (socket) => {
     };
 
     socket.join(roomId);
-
     socket.roomId = roomId;
     socket.username = username;
+    socket.role = "host";
 
     socket.emit("room-created", {
-      roomId: roomId,
+      roomId,
       participants: rooms[roomId].participants,
       videoId: rooms[roomId].videoId,
       isPlaying: rooms[roomId].isPlaying,
@@ -123,17 +103,12 @@ io.on("connection", (socket) => {
   socket.on("join-room", ({ roomId, username }) => {
     roomId = roomId.trim().toUpperCase();
 
-    console.log(
-      `🚪 ${username} trying to join ${roomId}`
-    );
+    console.log(`🚪 ${username} trying to join ${roomId}`);
 
     const room = rooms[roomId];
 
     if (!room) {
-      socket.emit(
-        "error-message",
-        "Room does not exist"
-      );
+      socket.emit("error-message", "Room does not exist");
       return;
     }
 
@@ -146,12 +121,12 @@ io.on("connection", (socket) => {
     room.participants.push(participant);
 
     socket.join(roomId);
-
     socket.roomId = roomId;
     socket.username = username;
+    socket.role = "participant";
 
     socket.emit("room-joined", {
-      roomId: roomId,
+      roomId,
       participants: room.participants,
       videoId: room.videoId,
       isPlaying: room.isPlaying,
@@ -163,13 +138,11 @@ io.on("connection", (socket) => {
       room.participants
     );
 
-    console.log(
-      `✅ ${username} joined ${roomId}`
-    );
+    console.log(`✅ ${username} joined ${roomId}`);
   });
 
   // =====================================
-  // PROMOTE PARTICIPANT TO MODERATOR
+  // MAKE MODERATOR
   // =====================================
 
   socket.on(
@@ -177,13 +150,14 @@ io.on("connection", (socket) => {
     ({ roomId, participantId }) => {
       const room = rooms[roomId];
 
-      if (!room) return;
+      if (!room) {
+        return;
+      }
 
-      // ONLY HOST CAN MAKE MODERATOR
+      // Only host can make someone moderator
       if (socket.id !== room.hostId) {
-        socket.emit(
-          "error-message",
-          "Only the host can make a moderator."
+        console.log(
+          "❌ Non-host tried to make moderator"
         );
         return;
       }
@@ -193,10 +167,6 @@ io.on("connection", (socket) => {
       );
 
       if (!participant) {
-        socket.emit(
-          "error-message",
-          "Participant not found."
-        );
         return;
       }
 
@@ -208,27 +178,18 @@ io.on("connection", (socket) => {
       participant.role = "moderator";
 
       console.log(
-        `🛡️ ${participant.username} is now a moderator`
+        `🛡️ ${participant.username} is now moderator`
       );
 
       io.to(roomId).emit(
         "participants-updated",
         room.participants
       );
-
-      io.to(roomId).emit(
-        "moderator-updated",
-        {
-          participantId: participant.id,
-          username: participant.username,
-          role: "moderator",
-        }
-      );
     }
   );
 
   // =====================================
-  // REMOVE MODERATOR ROLE
+  // REMOVE MODERATOR
   // =====================================
 
   socket.on(
@@ -236,14 +197,12 @@ io.on("connection", (socket) => {
     ({ roomId, participantId }) => {
       const room = rooms[roomId];
 
-      if (!room) return;
+      if (!room) {
+        return;
+      }
 
-      // ONLY HOST CAN REMOVE MODERATOR
+      // Only host can remove moderator role
       if (socket.id !== room.hostId) {
-        socket.emit(
-          "error-message",
-          "Only the host can remove moderator."
-        );
         return;
       }
 
@@ -251,16 +210,14 @@ io.on("connection", (socket) => {
         (p) => p.id === participantId
       );
 
-      if (!participant) return;
-
-      if (participant.id === room.hostId) {
+      if (!participant) {
         return;
       }
 
       participant.role = "participant";
 
       console.log(
-        `👤 ${participant.username} is no longer a moderator`
+        `👤 ${participant.username} is no longer moderator`
       );
 
       io.to(roomId).emit(
@@ -271,31 +228,36 @@ io.on("connection", (socket) => {
   );
 
   // =====================================
-  // KICK PARTICIPANT
+  // REMOVE PARTICIPANT
   // =====================================
 
   socket.on(
-    "kick-participant",
+    "remove-participant",
     ({ roomId, participantId }) => {
       const room = rooms[roomId];
 
-      if (!room) return;
+      if (!room) {
+        return;
+      }
 
-      // Host or moderator can kick
-      if (!canModerate(room, socket.id)) {
-        socket.emit(
-          "error-message",
-          "You do not have permission to remove participants."
+      // Host or moderator can remove participant
+      const currentUser = room.participants.find(
+        (p) => p.id === socket.id
+      );
+
+      if (
+        !currentUser ||
+        (currentUser.role !== "host" &&
+          currentUser.role !== "moderator")
+      ) {
+        console.log(
+          "❌ User is not allowed to remove participants"
         );
         return;
       }
 
-      // Cannot kick host
+      // Cannot remove the host
       if (participantId === room.hostId) {
-        socket.emit(
-          "error-message",
-          "Host cannot be removed."
-        );
         return;
       }
 
@@ -303,52 +265,43 @@ io.on("connection", (socket) => {
         (p) => p.id === participantId
       );
 
-      if (!participant) return;
-
-      // Moderator cannot kick another moderator
-      const currentUser = room.participants.find(
-        (p) => p.id === socket.id
-      );
-
-      if (
-        currentUser &&
-        currentUser.role === "moderator" &&
-        participant.role === "moderator"
-      ) {
-        socket.emit(
-          "error-message",
-          "Moderator cannot remove another moderator."
-        );
+      if (!participant) {
         return;
       }
 
-      // Remove from room
-      room.participants =
-        room.participants.filter(
-          (p) => p.id !== participantId
-        );
-
-      // Find target socket
-      const targetSocket =
-        io.sockets.sockets.get(participantId);
-
-      if (targetSocket) {
-        targetSocket.leave(roomId);
-        targetSocket.roomId = null;
-
-        targetSocket.emit(
-          "kicked-from-room",
-          "You have been removed from the room."
-        );
+      // Moderator cannot remove another moderator
+      if (
+        currentUser.role === "moderator" &&
+        participant.role === "moderator"
+      ) {
+        return;
       }
+
+      room.participants = room.participants.filter(
+        (p) => p.id !== participantId
+      );
 
       io.to(roomId).emit(
         "participants-updated",
         room.participants
       );
 
+      io.to(participantId).emit(
+        "removed-from-room",
+        "You have been removed from the room by a moderator."
+      );
+
+      const targetSocket = io.sockets.sockets.get(
+        participantId
+      );
+
+      if (targetSocket) {
+        targetSocket.leave(roomId);
+        targetSocket.roomId = null;
+      }
+
       console.log(
-        `🚫 ${participant.username} was removed from ${roomId}`
+        `🚫 ${participant.username} removed from ${roomId}`
       );
     }
   );
@@ -363,10 +316,6 @@ io.on("connection", (socket) => {
     if (!room) {
       return;
     }
-
-    console.log(
-      `🎬 Player ready: ${socket.id}`
-    );
 
     socket.emit("sync-video-state", {
       videoId: room.videoId,
@@ -388,17 +337,10 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Host OR moderator can change video
-      if (!canModerate(room, socket.id)) {
-        console.log(
-          "❌ User tried to change video without permission"
-        );
+      // Only host can change video
+      if (socket.id !== room.hostId) {
         return;
       }
-
-      console.log(
-        `📺 Changing video in ${roomId}: ${videoId}`
-      );
 
       room.videoId = videoId;
       room.currentTime = 0;
@@ -411,10 +353,6 @@ io.on("connection", (socket) => {
           currentTime: 0,
           isPlaying: false,
         }
-      );
-
-      console.log(
-        "✅ Video changed for everyone"
       );
     }
   );
@@ -432,8 +370,8 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Host OR moderator
-      if (!canModerate(room, socket.id)) {
+      // Only host controls playback
+      if (socket.id !== room.hostId) {
         return;
       }
 
@@ -443,10 +381,6 @@ io.on("connection", (socket) => {
           : 0;
 
       room.isPlaying = true;
-
-      console.log(
-        `▶️ PLAY ${roomId} at ${room.currentTime}`
-      );
 
       socket.to(roomId).emit(
         "video-play",
@@ -470,8 +404,8 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Host OR moderator
-      if (!canModerate(room, socket.id)) {
+      // Only host controls playback
+      if (socket.id !== room.hostId) {
         return;
       }
 
@@ -481,10 +415,6 @@ io.on("connection", (socket) => {
           : 0;
 
       room.isPlaying = false;
-
-      console.log(
-        `⏸️ PAUSE ${roomId} at ${room.currentTime}`
-      );
 
       socket.to(roomId).emit(
         "video-pause",
@@ -508,8 +438,8 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Host OR moderator
-      if (!canModerate(room, socket.id)) {
+      // Only host controls seeking
+      if (socket.id !== room.hostId) {
         return;
       }
 
@@ -517,10 +447,6 @@ io.on("connection", (socket) => {
         typeof currentTime === "number"
           ? currentTime
           : 0;
-
-      console.log(
-        `⏩ SEEK ${roomId} to ${room.currentTime}`
-      );
 
       socket.to(roomId).emit(
         "video-seek",
@@ -546,8 +472,8 @@ io.on("connection", (socket) => {
 
       const chatMessage = {
         id: Date.now(),
-        username: username,
-        message: message,
+        username,
+        message,
       };
 
       io.to(roomId).emit(
@@ -571,22 +497,14 @@ io.on("connection", (socket) => {
     const room = rooms[roomId];
 
     if (!room) {
-      socket.roomId = null;
       return;
     }
 
-    // =====================================
-    // HOST LEAVES
-    // =====================================
-
+    // Host leaves → close room
     if (socket.id === room.hostId) {
       io.to(roomId).emit(
         "error-message",
         "Host left the room. Room closed."
-      );
-
-      io.to(roomId).emit(
-        "room-closed"
       );
 
       delete rooms[roomId];
@@ -594,25 +512,16 @@ io.on("connection", (socket) => {
       socket.leave(roomId);
       socket.roomId = null;
 
-      console.log(
-        `❌ Room ${roomId} deleted because host left`
-      );
+      console.log(`❌ Room ${roomId} deleted`);
 
       return;
     }
 
-    // =====================================
-    // PARTICIPANT LEAVES
-    // =====================================
-
-    const leavingParticipant =
-      room.participants.find(
-        (p) => p.id === socket.id
-      );
-
+    // Participant/moderator leaves
     room.participants =
       room.participants.filter(
-        (p) => p.id !== socket.id
+        (participant) =>
+          participant.id !== socket.id
       );
 
     socket.leave(roomId);
@@ -624,11 +533,7 @@ io.on("connection", (socket) => {
     );
 
     console.log(
-      `👋 ${
-        leavingParticipant
-          ? leavingParticipant.username
-          : socket.username
-      } left ${roomId}`
+      `👋 ${socket.username} left ${roomId}`
     );
   });
 
@@ -654,18 +559,11 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // =====================================
-    // HOST LEFT
-    // =====================================
-
+    // Host disconnected
     if (socket.id === room.hostId) {
       io.to(roomId).emit(
         "error-message",
         "Host left the room. Room closed."
-      );
-
-      io.to(roomId).emit(
-        "room-closed"
       );
 
       delete rooms[roomId];
@@ -677,10 +575,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // =====================================
-    // PARTICIPANT LEFT
-    // =====================================
-
+    // Participant/moderator disconnected
     room.participants =
       room.participants.filter(
         (participant) =>
@@ -690,10 +585,6 @@ io.on("connection", (socket) => {
     io.to(roomId).emit(
       "participants-updated",
       room.participants
-    );
-
-    console.log(
-      `👋 Participant left ${roomId}`
     );
   });
 });
