@@ -6,13 +6,24 @@ const { Server } = require("socket.io");
 const app = express();
 const server = http.createServer(app);
 
-// =================================
-// CORS
-// =================================
+const allowedOrigins = [
+  "https://youtube-watch-party-swart.vercel.app",
+  "https://youtube-watch-party-gpd05qzpo-chowdharybhavya-techs-projects.vercel.app",
+];
 
 app.use(
   cors({
-    origin: true,
+    origin: function (origin, callback) {
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
     methods: ["GET", "POST"],
     credentials: true,
   })
@@ -20,21 +31,14 @@ app.use(
 
 app.use(express.json());
 
-// =================================
-// SOCKET.IO
-// =================================
-
 const io = new Server(server, {
   cors: {
-    origin: true,
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true,
   },
+  transports: ["polling", "websocket"],
 });
-
-// =================================
-// ROOMS
-// =================================
 
 const rooms = {};
 
@@ -45,19 +49,11 @@ function generateRoomCode() {
     .toUpperCase();
 }
 
-// =================================
-// SOCKET CONNECTION
-// =================================
-
 io.on("connection", (socket) => {
   console.log("🟢 Connected:", socket.id);
 
-  // =================================
-  // CREATE ROOM
-  // =================================
-
   socket.on("create-room", ({ username }) => {
-    console.log("Creating room for:", username);
+    console.log("🏠 Creating room for:", username);
 
     let roomId;
 
@@ -67,7 +63,6 @@ io.on("connection", (socket) => {
 
     rooms[roomId] = {
       hostId: socket.id,
-
       participants: [
         {
           id: socket.id,
@@ -75,14 +70,12 @@ io.on("connection", (socket) => {
           role: "host",
         },
       ],
-
       videoId: "dQw4w9WgXcQ",
       isPlaying: false,
       currentTime: 0,
     };
 
     socket.join(roomId);
-
     socket.roomId = roomId;
     socket.username = username;
 
@@ -96,10 +89,6 @@ io.on("connection", (socket) => {
 
     console.log("✅ Room created:", roomId);
   });
-
-  // =================================
-  // JOIN ROOM
-  // =================================
 
   socket.on("join-room", ({ roomId, username }) => {
     roomId = roomId.trim().toUpperCase();
@@ -122,7 +111,6 @@ io.on("connection", (socket) => {
     room.participants.push(participant);
 
     socket.join(roomId);
-
     socket.roomId = roomId;
     socket.username = username;
 
@@ -142,18 +130,10 @@ io.on("connection", (socket) => {
     console.log(`✅ ${username} joined ${roomId}`);
   });
 
-  // =================================
-  // PLAYER READY
-  // =================================
-
   socket.on("player-ready", ({ roomId }) => {
     const room = rooms[roomId];
 
     if (!room) return;
-
-    console.log(
-      `🎬 Player ready: ${socket.id} in ${roomId}`
-    );
 
     socket.emit("sync-video-state", {
       videoId: room.videoId,
@@ -161,10 +141,6 @@ io.on("connection", (socket) => {
       currentTime: room.currentTime,
     });
   });
-
-  // =================================
-  // CHANGE VIDEO
-  // =================================
 
   socket.on(
     "change-video",
@@ -174,13 +150,8 @@ io.on("connection", (socket) => {
       if (!room) return;
 
       if (socket.id !== room.hostId) {
-        console.log("❌ Non-host tried to change video");
         return;
       }
-
-      console.log(
-        `📺 Changing video in ${roomId}: ${videoId}`
-      );
 
       room.videoId = videoId;
       room.currentTime = 0;
@@ -192,13 +163,11 @@ io.on("connection", (socket) => {
         isPlaying: false,
       });
 
-      console.log("✅ Video changed for everyone");
+      console.log(
+        `📺 Video changed in ${roomId}: ${videoId}`
+      );
     }
   );
-
-  // =================================
-  // PLAY
-  // =================================
 
   socket.on(
     "play-video",
@@ -218,19 +187,15 @@ io.on("connection", (socket) => {
 
       room.isPlaying = true;
 
-      console.log(
-        `▶️ PLAY ${roomId} at ${room.currentTime}`
-      );
-
       socket.to(roomId).emit("video-play", {
         currentTime: room.currentTime,
       });
+
+      console.log(
+        `▶️ PLAY ${roomId} at ${room.currentTime}`
+      );
     }
   );
-
-  // =================================
-  // PAUSE
-  // =================================
 
   socket.on(
     "pause-video",
@@ -250,19 +215,15 @@ io.on("connection", (socket) => {
 
       room.isPlaying = false;
 
-      console.log(
-        `⏸️ PAUSE ${roomId} at ${room.currentTime}`
-      );
-
       socket.to(roomId).emit("video-pause", {
         currentTime: room.currentTime,
       });
+
+      console.log(
+        `⏸️ PAUSE ${roomId} at ${room.currentTime}`
+      );
     }
   );
-
-  // =================================
-  // SEEK
-  // =================================
 
   socket.on(
     "seek-video",
@@ -280,19 +241,15 @@ io.on("connection", (socket) => {
           ? currentTime
           : 0;
 
-      console.log(
-        `⏩ SEEK ${roomId} to ${room.currentTime}`
-      );
-
       socket.to(roomId).emit("video-seek", {
         currentTime: room.currentTime,
       });
+
+      console.log(
+        `⏩ SEEK ${roomId} to ${room.currentTime}`
+      );
     }
   );
-
-  // =================================
-  // CHAT
-  // =================================
 
   socket.on(
     "send-message",
@@ -314,64 +271,6 @@ io.on("connection", (socket) => {
     }
   );
 
-  // =================================
-  // LEAVE ROOM
-  // =================================
-
-  socket.on("leave-room", () => {
-    const roomId = socket.roomId;
-
-    if (!roomId) return;
-
-    const room = rooms[roomId];
-
-    if (!room) return;
-
-    console.log(
-      `🚪 ${socket.username} leaving ${roomId}`
-    );
-
-    // Host leaves → close room
-    if (socket.id === room.hostId) {
-      io.to(roomId).emit(
-        "error-message",
-        "Host left the room. Room closed."
-      );
-
-      delete rooms[roomId];
-
-      socket.leave(roomId);
-
-      console.log(
-        `❌ Room ${roomId} deleted`
-      );
-
-      return;
-    }
-
-    // Participant leaves
-    room.participants =
-      room.participants.filter(
-        (participant) =>
-          participant.id !== socket.id
-      );
-
-    socket.leave(roomId);
-
-    io.to(roomId).emit(
-      "participants-updated",
-      room.participants
-    );
-
-    console.log(
-      `👋 ${socket.username} left ${roomId}`
-    );
-  });
-
-  // =================================
-  // DISCONNECT
-  // =================================
-
   socket.on("disconnect", () => {
     console.log("🔴 Disconnected:", socket.id);
 
@@ -383,7 +282,6 @@ io.on("connection", (socket) => {
 
     if (!room) return;
 
-    // Host disconnected
     if (socket.id === room.hostId) {
       io.to(roomId).emit(
         "error-message",
@@ -399,7 +297,6 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // Participant disconnected
     room.participants =
       room.participants.filter(
         (participant) =>
@@ -413,21 +310,19 @@ io.on("connection", (socket) => {
   });
 });
 
-// =================================
-// BASIC ROUTE
-// =================================
-
 app.get("/", (req, res) => {
   res.send(
     "🎬 YouTube Watch Party Server Running"
   );
 });
 
-// =================================
-// START SERVER
-// =================================
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    socketio: true,
+  });
+});
 
-// IMPORTANT FOR RENDER
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, "0.0.0.0", () => {
