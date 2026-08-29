@@ -11,13 +11,13 @@ The application also includes real-time chat and a role-based moderation system 
 ## 🚀 Live Demo
 
 **Frontend:**  
-https://YOUR-VERCEL-URL.vercel.app
+https://youtube-watch-party-swart.vercel.app/
 
 **Backend:**  
 https://youtube-watch-party-bejz.onrender.com
 
 **GitHub:**  
-https://github.com/YOUR-GITHUB-USERNAME/YOUR-REPOSITORY
+https://github.com/chowdharybhavya-tech/youtube-watch-party.git
 
 ---
 
@@ -115,3 +115,17 @@ youtube-watch-party/
 │
 ├── README.md
 └── .gitignore
+
+
+## ▶️ How to Run Locally
+
+### Backend
+
+```bash
+cd server
+npm install
+node server.js
+
+cd client
+npm install
+npm run dev
