@@ -10,7 +10,6 @@ function App() {
 
   const [username, setUsername] = useState("");
   const [roomCode, setRoomCode] = useState("");
-
   const [participants, setParticipants] = useState([]);
 
   const [isHost, setIsHost] = useState(false);
@@ -31,27 +30,19 @@ function App() {
   // =====================================================
 
   useEffect(() => {
-    // -----------------------------------------------------
-    // CONNECT
-    // -----------------------------------------------------
-
     const handleConnect = () => {
-      console.log("🟢 Connected to server:", socket.id);
+      console.log("🟢 Connected:", socket.id);
       setConnected(true);
     };
 
-    // -----------------------------------------------------
-    // DISCONNECT
-    // -----------------------------------------------------
-
     const handleDisconnect = () => {
-      console.log("🔴 Disconnected from server");
+      console.log("🔴 Disconnected");
       setConnected(false);
     };
 
-    // -----------------------------------------------------
+    // -------------------------------
     // ROOM CREATED
-    // -----------------------------------------------------
+    // -------------------------------
 
     const handleRoomCreated = (data) => {
       console.log("🏠 ROOM CREATED:", data);
@@ -62,9 +53,7 @@ function App() {
       setIsHost(true);
       setJoined(true);
 
-      if (data.videoId) {
-        setVideoId(data.videoId);
-      }
+      setVideoId(data.videoId || "dQw4w9WgXcQ");
 
       setCurrentTime(
         typeof data.currentTime === "number"
@@ -75,9 +64,9 @@ function App() {
       setIsPlaying(data.isPlaying === true);
     };
 
-    // -----------------------------------------------------
+    // -------------------------------
     // ROOM JOINED
-    // -----------------------------------------------------
+    // -------------------------------
 
     const handleRoomJoined = (data) => {
       console.log("🚪 ROOM JOINED:", data);
@@ -88,9 +77,7 @@ function App() {
       setIsHost(false);
       setJoined(true);
 
-      if (data.videoId) {
-        setVideoId(data.videoId);
-      }
+      setVideoId(data.videoId || "dQw4w9WgXcQ");
 
       setCurrentTime(
         typeof data.currentTime === "number"
@@ -101,9 +88,9 @@ function App() {
       setIsPlaying(data.isPlaying === true);
     };
 
-    // -----------------------------------------------------
+    // -------------------------------
     // PARTICIPANTS UPDATED
-    // -----------------------------------------------------
+    // -------------------------------
 
     const handleParticipantsUpdated = (data) => {
       console.log("👥 PARTICIPANTS UPDATED:", data);
@@ -111,16 +98,14 @@ function App() {
       setParticipants(data || []);
     };
 
-    // -----------------------------------------------------
+    // -------------------------------
     // VIDEO CHANGED
-    // -----------------------------------------------------
+    // -------------------------------
 
     const handleVideoChanged = (data) => {
       console.log("📺 VIDEO CHANGED:", data);
 
-      if (!data?.videoId) {
-        return;
-      }
+      if (!data?.videoId) return;
 
       setVideoId(data.videoId);
 
@@ -133,12 +118,12 @@ function App() {
       setIsPlaying(data.isPlaying === true);
     };
 
-    // -----------------------------------------------------
-    // REMOTE PLAY
-    // -----------------------------------------------------
+    // -------------------------------
+    // VIDEO PLAY
+    // -------------------------------
 
     const handleVideoPlay = (data) => {
-      console.log("▶️ REMOTE PLAY:", data);
+      console.log("▶️ VIDEO PLAY:", data);
 
       if (typeof data?.currentTime === "number") {
         setCurrentTime(data.currentTime);
@@ -147,12 +132,12 @@ function App() {
       setIsPlaying(true);
     };
 
-    // -----------------------------------------------------
-    // REMOTE PAUSE
-    // -----------------------------------------------------
+    // -------------------------------
+    // VIDEO PAUSE
+    // -------------------------------
 
     const handleVideoPause = (data) => {
-      console.log("⏸️ REMOTE PAUSE:", data);
+      console.log("⏸️ VIDEO PAUSE:", data);
 
       if (typeof data?.currentTime === "number") {
         setCurrentTime(data.currentTime);
@@ -161,24 +146,24 @@ function App() {
       setIsPlaying(false);
     };
 
-    // -----------------------------------------------------
-    // REMOTE SEEK
-    // -----------------------------------------------------
+    // -------------------------------
+    // VIDEO SEEK
+    // -------------------------------
 
     const handleVideoSeek = (data) => {
-      console.log("⏩ REMOTE SEEK:", data);
+      console.log("⏩ VIDEO SEEK:", data);
 
       if (typeof data?.currentTime === "number") {
         setCurrentTime(data.currentTime);
       }
     };
 
-    // -----------------------------------------------------
-    // SYNC VIDEO STATE
-    // -----------------------------------------------------
+    // -------------------------------
+    // SYNC VIDEO
+    // -------------------------------
 
     const handleSyncVideoState = (data) => {
-      console.log("🔄 SYNC VIDEO STATE:", data);
+      console.log("🔄 SYNC VIDEO:", data);
 
       if (data?.videoId) {
         setVideoId(data.videoId);
@@ -193,12 +178,12 @@ function App() {
       setIsPlaying(data?.isPlaying === true);
     };
 
-    // -----------------------------------------------------
+    // -------------------------------
     // CHAT
-    // -----------------------------------------------------
+    // -------------------------------
 
     const handleReceiveMessage = (chatMessage) => {
-      console.log("💬 NEW MESSAGE:", chatMessage);
+      console.log("💬 MESSAGE:", chatMessage);
 
       setMessages((previousMessages) => [
         ...previousMessages,
@@ -206,50 +191,35 @@ function App() {
       ]);
     };
 
-    // -----------------------------------------------------
+    // -------------------------------
     // ERROR
-    // -----------------------------------------------------
+    // -------------------------------
 
     const handleError = (msg) => {
       console.error("❌ SERVER ERROR:", msg);
-
       alert(msg);
     };
 
-    // -----------------------------------------------------
+    // -------------------------------
     // REMOVED FROM ROOM
-    // -----------------------------------------------------
+    // -------------------------------
 
     const handleRemovedFromRoom = (msg) => {
-      console.log("🚫 Removed from room:", msg);
+      console.log("🚫 Removed:", msg);
 
       alert(msg);
 
-      setJoined(false);
-      setRoomCode("");
-      setParticipants([]);
-      setIsHost(false);
-
-      setVideoId("dQw4w9WgXcQ");
-      setVideoUrl("");
-
-      setCurrentTime(0);
-      setIsPlaying(false);
-
-      setMessages([]);
-      setMessage("");
+      resetRoom();
     };
 
     // =====================================================
-    // REGISTER EVENTS
+    // REGISTER SOCKET EVENTS
     // =====================================================
 
     socket.on("connect", handleConnect);
-
     socket.on("disconnect", handleDisconnect);
 
     socket.on("room-created", handleRoomCreated);
-
     socket.on("room-joined", handleRoomJoined);
 
     socket.on(
@@ -296,10 +266,6 @@ function App() {
       "removed-from-room",
       handleRemovedFromRoom
     );
-
-    // IMPORTANT:
-    // If socket was already connected before this effect
-    // started, update the UI immediately.
 
     if (socket.connected) {
       setConnected(true);
@@ -371,14 +337,33 @@ function App() {
   }, []);
 
   // =====================================================
+  // RESET ROOM
+  // =====================================================
+
+  const resetRoom = () => {
+    setJoined(false);
+    setRoomCode("");
+    setParticipants([]);
+
+    setIsHost(false);
+
+    setVideoId("dQw4w9WgXcQ");
+    setVideoUrl("");
+
+    setCurrentTime(0);
+    setIsPlaying(false);
+
+    setMessages([]);
+    setMessage("");
+  };
+
+  // =====================================================
   // CREATE ROOM
   // =====================================================
 
   const createRoom = () => {
     if (!connected) {
-      alert(
-        "Server is not connected. Please wait a moment and try again."
-      );
+      alert("Server is not connected.");
       return;
     }
 
@@ -386,11 +371,6 @@ function App() {
       alert("Please enter your username");
       return;
     }
-
-    console.log(
-      "🏠 Creating room for:",
-      username
-    );
 
     socket.emit("create-room", {
       username: username.trim(),
@@ -403,9 +383,7 @@ function App() {
 
   const joinRoom = () => {
     if (!connected) {
-      alert(
-        "Server is not connected. Please wait a moment and try again."
-      );
+      alert("Server is not connected.");
       return;
     }
 
@@ -415,20 +393,12 @@ function App() {
     }
 
     if (!roomCode.trim()) {
-      alert("Please enter a room code");
+      alert("Please enter room code");
       return;
     }
 
-    const finalRoomCode =
-      roomCode.trim().toUpperCase();
-
-    console.log(
-      "🚪 Joining room:",
-      finalRoomCode
-    );
-
     socket.emit("join-room", {
-      roomId: finalRoomCode,
+      roomId: roomCode.trim().toUpperCase(),
       username: username.trim(),
     });
   };
@@ -448,22 +418,12 @@ function App() {
 
       let newVideoId = "";
 
-      // youtu.be/VIDEO_ID
-
-      if (
-        url.hostname.includes("youtu.be")
-      ) {
-        newVideoId =
-          url.pathname.substring(1);
-      }
-
-      // youtube.com/watch?v=VIDEO_ID
-
-      else if (
+      if (url.hostname.includes("youtu.be")) {
+        newVideoId = url.pathname.substring(1);
+      } else if (
         url.hostname.includes("youtube.com")
       ) {
-        newVideoId =
-          url.searchParams.get("v");
+        newVideoId = url.searchParams.get("v");
       }
 
       if (!newVideoId) {
@@ -471,34 +431,19 @@ function App() {
         return;
       }
 
-      console.log(
-        "📺 HOST CHANGING VIDEO:",
-        newVideoId
-      );
-
-      // Update host immediately
-
       setVideoId(newVideoId);
       setCurrentTime(0);
       setIsPlaying(false);
 
-      // Tell server
-
-      socket.emit(
-        "change-video",
-        {
-          roomId: roomCode,
-          videoId: newVideoId,
-        }
-      );
+      socket.emit("change-video", {
+        roomId: roomCode,
+        videoId: newVideoId,
+      });
 
       setVideoUrl("");
     } catch (error) {
       console.error(error);
-
-      alert(
-        "Please enter a valid YouTube URL"
-      );
+      alert("Please enter a valid YouTube URL");
     }
   };
 
@@ -508,17 +453,14 @@ function App() {
 
   const makeModerator = (participantId) => {
     console.log(
-      "🛡️ Making moderator:",
+      "🛡️ MAKE MODERATOR:",
       participantId
     );
 
-    socket.emit(
-      "make-moderator",
-      {
-        roomId: roomCode,
-        participantId: participantId,
-      }
-    );
+    socket.emit("make-moderator", {
+      roomId: roomCode,
+      participantId,
+    });
   };
 
   // =====================================================
@@ -527,17 +469,14 @@ function App() {
 
   const removeModerator = (participantId) => {
     console.log(
-      "👤 Removing moderator:",
+      "👤 REMOVE MODERATOR:",
       participantId
     );
 
-    socket.emit(
-      "remove-moderator",
-      {
-        roomId: roomCode,
-        participantId: participantId,
-      }
-    );
+    socket.emit("remove-moderator", {
+      roomId: roomCode,
+      participantId,
+    });
   };
 
   // =====================================================
@@ -549,22 +488,12 @@ function App() {
       "Are you sure you want to remove this participant?"
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
-    console.log(
-      "🚫 Removing participant:",
-      participantId
-    );
-
-    socket.emit(
-      "remove-participant",
-      {
-        roomId: roomCode,
-        participantId: participantId,
-      }
-    );
+    socket.emit("remove-participant", {
+      roomId: roomCode,
+      participantId,
+    });
   };
 
   // =====================================================
@@ -572,30 +501,11 @@ function App() {
   // =====================================================
 
   const leaveRoom = () => {
-    if (!joined) {
-      return;
-    }
-
-    console.log(
-      "🚪 Leaving room:",
-      roomCode
-    );
+    if (!joined) return;
 
     socket.emit("leave-room");
 
-    setJoined(false);
-    setRoomCode("");
-    setParticipants([]);
-    setIsHost(false);
-
-    setVideoId("dQw4w9WgXcQ");
-    setVideoUrl("");
-
-    setCurrentTime(0);
-    setIsPlaying(false);
-
-    setMessages([]);
-    setMessage("");
+    resetRoom();
   };
 
   // =====================================================
@@ -603,32 +513,18 @@ function App() {
   // =====================================================
 
   const sendMessage = () => {
-    if (!message.trim()) {
-      return;
-    }
+    if (!message.trim()) return;
 
     if (!joined) {
-      alert(
-        "Please create or join a room first"
-      );
+      alert("Please join a room first");
       return;
     }
 
-    const chatData = {
+    socket.emit("send-message", {
       roomId: roomCode,
       username: username.trim(),
       message: message.trim(),
-    };
-
-    console.log(
-      "💬 Sending message:",
-      chatData
-    );
-
-    socket.emit(
-      "send-message",
-      chatData
-    );
+    });
 
     setMessage("");
   };
@@ -650,13 +546,11 @@ function App() {
   return (
     <div className="app">
 
-      {/* =================================================
+      {/* =====================================================
           SIDEBAR
-      ================================================= */}
+      ===================================================== */}
 
       <aside className="sidebar">
-
-        {/* LOGO */}
 
         <div className="logo">
           🎬 WatchParty
@@ -671,13 +565,9 @@ function App() {
           {joined ? (
             <div className="room-card">
 
-              <span>
-                Room Code
-              </span>
+              <span>Room Code</span>
 
-              <strong>
-                {roomCode}
-              </strong>
+              <strong>{roomCode}</strong>
 
               <button
                 onClick={() => {
@@ -685,9 +575,7 @@ function App() {
                     roomCode
                   );
 
-                  alert(
-                    "Room code copied!"
-                  );
+                  alert("Room code copied!");
                 }}
               >
                 📋 Copy Code
@@ -697,22 +585,18 @@ function App() {
           ) : (
             <div className="room-card">
 
-              <span>
-                Room Code
-              </span>
+              <span>Room Code</span>
 
-              <strong>
-                ------
-              </strong>
+              <strong>------</strong>
 
             </div>
           )}
 
         </div>
 
-        {/* =================================================
+        {/* =====================================================
             PARTICIPANTS
-        ================================================= */}
+        ===================================================== */}
 
         <div className="sidebar-section participants-section">
 
@@ -730,107 +614,102 @@ function App() {
 
             <div className="participants-list">
 
-              {participants.map(
-                (participant) => (
+              {participants.map((participant) => (
 
-                  <div
-                    className="participant"
-                    key={participant.id}
-                  >
+                <div
+                  className="participant"
+                  key={participant.id}
+                >
 
-                    {/* AVATAR */}
+                  {/* AVATAR */}
 
-                    <div className="participant-avatar">
+                  <div className="participant-avatar">
 
-                      {participant.username
-                        ? participant.username
-                            .charAt(0)
-                            .toUpperCase()
-                        : "U"}
+                    {participant.username
+                      ? participant.username
+                          .charAt(0)
+                          .toUpperCase()
+                      : "U"}
 
-                    </div>
+                  </div>
 
-                    {/* INFORMATION */}
+                  {/* INFORMATION */}
 
-                    <div className="participant-info">
+                  <div className="participant-info">
 
-                      <strong>
-                        {participant.username}
-                      </strong>
+                    <strong>
+                      {participant.username}
+                    </strong>
 
-                      <span>
+                    <span>
+
+                      {participant.role === "host"
+                        ? "👑 Host"
+                        : participant.role === "moderator"
+                        ? "🛡️ Moderator"
+                        : "👤 Participant"}
+
+                    </span>
+
+                  </div>
+
+                  {/* =================================================
+                      HOST CONTROLS
+                  ================================================= */}
+
+                  {isHost &&
+                    participant.role !== "host" && (
+
+                      <div className="moderator-controls">
+
+                        {/* MAKE / REMOVE MODERATOR */}
 
                         {participant.role ===
-                        "host"
-                          ? "👑 Host"
-                          : participant.role ===
-                            "moderator"
-                          ? "🛡️ Moderator"
-                          : "👤 Participant"}
-
-                      </span>
-
-                    </div>
-
-                    {/* =================================================
-                        MODERATOR CONTROLS
-                    ================================================= */}
-
-                    {isHost &&
-                      participant.id !==
-                        socket.id && (
-
-                        <div className="moderator-controls">
-
-                          {/* MAKE / REMOVE MODERATOR */}
-
-                          {participant.role ===
-                          "moderator" ? (
-
-                            <button
-                              onClick={() =>
-                                removeModerator(
-                                  participant.id
-                                )
-                              }
-                            >
-                              👤 Remove Moderator
-                            </button>
-
-                          ) : (
-
-                            <button
-                              onClick={() =>
-                                makeModerator(
-                                  participant.id
-                                )
-                              }
-                            >
-                              🛡️ Make Moderator
-                            </button>
-
-                          )}
-
-                          {/* REMOVE PARTICIPANT */}
+                        "moderator" ? (
 
                           <button
                             onClick={() =>
-                              removeParticipant(
+                              removeModerator(
                                 participant.id
                               )
                             }
                           >
-                            🚫 Remove
+                            👤 Remove Moderator
                           </button>
 
-                        </div>
+                        ) : (
 
-                      )}
+                          <button
+                            onClick={() =>
+                              makeModerator(
+                                participant.id
+                              )
+                            }
+                          >
+                            🛡️ Make Moderator
+                          </button>
 
-                  </div>
+                        )}
 
-                )
-              )}
+                        {/* REMOVE USER */}
+
+                        <button
+                          onClick={() =>
+                            removeParticipant(
+                              participant.id
+                            )
+                          }
+                        >
+                          🚫 Remove
+                        </button>
+
+                      </div>
+
+                    )}
+
+                </div>
+
+              ))}
 
             </div>
 
@@ -838,9 +717,7 @@ function App() {
 
         </div>
 
-        {/* =================================================
-            LEAVE ROOM
-        ================================================= */}
+        {/* LEAVE */}
 
         {joined && (
 
@@ -855,9 +732,9 @@ function App() {
 
       </aside>
 
-      {/* =================================================
+      {/* =====================================================
           MAIN CONTENT
-      ================================================= */}
+      ===================================================== */}
 
       <main className="main-content">
 
@@ -891,9 +768,9 @@ function App() {
 
         </header>
 
-        {/* =================================================
+        {/* =====================================================
             ROOM SETUP
-        ================================================= */}
+        ===================================================== */}
 
         {!joined && (
 
@@ -904,11 +781,11 @@ function App() {
             </h2>
 
             <p>
-              Enter your name to start
-              watching with friends.
+              Enter your name to start watching
+              with friends.
             </p>
 
-            {/* CREATE ROOM */}
+            {/* CREATE */}
 
             <div className="input-group">
 
@@ -916,16 +793,12 @@ function App() {
                 type="text"
                 value={username}
                 onChange={(e) =>
-                  setUsername(
-                    e.target.value
-                  )
+                  setUsername(e.target.value)
                 }
                 placeholder="Enter your name"
               />
 
-              <button
-                onClick={createRoom}
-              >
+              <button onClick={createRoom}>
                 ✨ Create Room
               </button>
 
@@ -935,7 +808,7 @@ function App() {
               OR
             </div>
 
-            {/* JOIN ROOM */}
+            {/* JOIN */}
 
             <div className="input-group">
 
@@ -950,9 +823,7 @@ function App() {
                 placeholder="Enter room code"
               />
 
-              <button
-                onClick={joinRoom}
-              >
+              <button onClick={joinRoom}>
                 Join Room →
               </button>
 
@@ -962,17 +833,15 @@ function App() {
 
         )}
 
-        {/* =================================================
+        {/* =====================================================
             WATCH PARTY
-        ================================================= */}
+        ===================================================== */}
 
         {joined && (
 
           <div className="watch-party">
 
-            {/* =================================================
-                VIDEO
-            ================================================= */}
+            {/* VIDEO */}
 
             <section className="video-card">
 
@@ -990,8 +859,6 @@ function App() {
 
                 </div>
 
-                {/* HOST BADGE */}
-
                 {isHost && (
 
                   <span className="host-badge">
@@ -1002,7 +869,7 @@ function App() {
 
               </div>
 
-              {/* YOUTUBE PLAYER */}
+              {/* PLAYER */}
 
               <YouTubePlayer
                 videoId={videoId}
@@ -1022,16 +889,12 @@ function App() {
                     type="text"
                     value={videoUrl}
                     onChange={(e) =>
-                      setVideoUrl(
-                        e.target.value
-                      )
+                      setVideoUrl(e.target.value)
                     }
                     placeholder="Paste YouTube URL..."
                   />
 
-                  <button
-                    onClick={changeVideo}
-                  >
+                  <button onClick={changeVideo}>
                     Change Video
                   </button>
 
@@ -1072,9 +935,7 @@ function App() {
                   <div className="empty-chat">
 
                     💬 No messages yet.
-
                     <br />
-
                     Start the conversation!
 
                   </div>
@@ -1128,9 +989,7 @@ function App() {
                   type="text"
                   value={message}
                   onChange={(e) =>
-                    setMessage(
-                      e.target.value
-                    )
+                    setMessage(e.target.value)
                   }
                   onKeyDown={
                     handleMessageKeyDown
@@ -1138,9 +997,7 @@ function App() {
                   placeholder="Type a message..."
                 />
 
-                <button
-                  onClick={sendMessage}
-                >
+                <button onClick={sendMessage}>
                   ➤
                 </button>
 
