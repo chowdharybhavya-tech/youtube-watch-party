@@ -17,7 +17,10 @@ socket.on("disconnect", () => {
 });
 
 socket.on("connect_error", (error) => {
-  console.error("❌ Socket connection error:", error.message);
+  console.error(
+    "❌ Socket connection error:",
+    error.message
+  );
 });
 
 export default socket;
